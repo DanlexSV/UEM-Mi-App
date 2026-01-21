@@ -6,10 +6,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import com.google.firebase.auth.FirebaseAuth
 import com.uem.miapp.ui.theme.MiAppTheme
 import com.uem.miapp.ui.login.AuthScreen
+import com.uem.miapp.ui.home.HomeScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -17,11 +23,23 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MiAppTheme {
-                AuthScreen(
-                    onAuthSuccess = {
-                        // navegación a HomeScreen (la haremos después)
-                    }
-                )
+                val auth = remember { FirebaseAuth.getInstance() }
+                var isLoggedIn by remember { mutableStateOf(auth.currentUser != null) }
+
+                if (!isLoggedIn) {
+                    AuthScreen(
+                        onAuthSuccess = {
+                            isLoggedIn = true
+                        }
+                    )
+                } else {
+                    HomeScreen(
+                        onSignOut = {
+                            com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
+                            isLoggedIn = false
+                        }
+                    )
+                }
             }
         }
     }
