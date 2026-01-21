@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "106362587904",
+    "project_id": "uem-mi-app",
+    "storage_bucket": "uem-mi-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:106362587904:android:8f7f01bb8b690df41441e5",
+        "android_client_info": {
+          "package_name": "com.uem.miapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCQ35WeumSddwScA2NK0-vHPYy0lCSRHeQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
