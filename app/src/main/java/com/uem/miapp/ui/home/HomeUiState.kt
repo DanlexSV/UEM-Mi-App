@@ -10,5 +10,7 @@ data class HomeUiState(
     val filterName: String? = null,
     val loading: Boolean = false,
     val error: String? = null,
-    val uploadSuccess: Boolean = false
-)
+    val uploadSuccess: Boolean = false,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    )

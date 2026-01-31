@@ -1,13 +1,21 @@
 package com.uem.miapp.ui.home
 
 import android.content.ContentResolver
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.lifecycle.ViewModel
+import com.uem.miapp.util.GPUImageUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import android.util.Log
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
+import java.io.ByteArrayOutputStream
+import java.util.*
 
 class HomeViewModel : ViewModel() {
 
@@ -35,27 +43,119 @@ class HomeViewModel : ViewModel() {
         }
     }
 
-    fun applySimpleFilterPlaceholder() {
-        // Placeholder de filtro SIN OpenCV (para comprobar flujo).
-        // Luego lo cambiamos por OpenCV.
+    fun applyGPUFilter(context: Context, filter: GPUImageUtils.FilterType) {
         val original = _uiState.value.originalBitmap ?: run {
             _uiState.update { it.copy(error = "Primero selecciona una imagen.") }
             return
         }
 
-        val filtered = original.copy(Bitmap.Config.ARGB_8888, true) // (sin cambios)
-        _uiState.update { it.copy(filteredBitmap = filtered, filterName = "placeholder", error = null) }
+        val filtered = GPUImageUtils.applyFilter(context, original, filter)
+        _uiState.update {
+            it.copy(
+                filteredBitmap = filtered,
+                filterName = filter.name.lowercase(),
+                error = null
+            )
+        }
     }
 
-    fun uploadPlaceholder() {
-        val bitmapToUpload = _uiState.value.filteredBitmap ?: _uiState.value.originalBitmap
-        if (bitmapToUpload == null) {
+    fun uploadToFirebase(context: Context) {
+        val bitmap = _uiState.value.filteredBitmap ?: _uiState.value.originalBitmap
+        if (bitmap == null) {
             _uiState.update { it.copy(error = "Primero selecciona una imagen.") }
             return
         }
 
-        // Placeholder: luego aquí subimos a Firebase Storage + guardamos metadata en Firestore + GPS
-        _uiState.update { it.copy(uploadSuccess = true, error = null) }
+        val user = FirebaseAuth.getInstance().currentUser
+        if (user == null) {
+            _uiState.update { it.copy(error = "Usuario no autenticado.") }
+            return
+        }
+
+        val lat = _uiState.value.latitude
+        val lng = _uiState.value.longitude
+        val filter = _uiState.value.filterName ?: "none"
+
+        val baos = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, baos)
+        val imageData = baos.toByteArray()
+
+        val filename = "images/${user.uid}_${System.currentTimeMillis()}.jpg"
+        val storageRef = FirebaseStorage.getInstance().reference.child(filename)
+
+        _uiState.update { it.copy(loading = true, error = null) }
+
+        storageRef.putBytes(imageData)
+            .addOnSuccessListener {
+                storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
+                    val metadata = hashMapOf(
+                        "uid" to user.uid,
+                        "url" to downloadUrl.toString(),
+                        "lat" to lat,
+                        "lng" to lng,
+                        "filter" to filter,
+                        "timestamp" to com.google.firebase.Timestamp.now()
+                    )
+
+                    FirebaseFirestore.getInstance()
+                        .collection("photos")
+                        .add(metadata)
+                        .addOnSuccessListener {
+                            _uiState.update {
+                                it.copy(uploadSuccess = true, loading = false, error = null)
+                            }
+                        }
+                        .addOnFailureListener { e ->
+                            Log.e("FIRESTORE", "Error metadata: ${e.message}")
+                            _uiState.update {
+                                it.copy(error = "Error al guardar metadata.", loading = false)
+                            }
+                        }
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("FIREBASE", "Error subida: ${e.message}")
+                _uiState.update {
+                    it.copy(error = "Error al subir imagen: ${e.message}", loading = false)
+                }
+            }
+    }
+
+    fun onImagePickedWithLocation(uri: Uri?, contentResolver: ContentResolver, lat: Double?, lng: Double?) {
+        if (uri == null) return
+
+        val inputStream = contentResolver.openInputStream(uri)
+        val bitmap = BitmapFactory.decodeStream(inputStream)
+
+        _uiState.update {
+            it.copy(
+                originalBitmap = bitmap,
+                latitude = lat,
+                longitude = lng,
+                uploadSuccess = false,
+                error = null
+            )
+        }
+    }
+
+    fun onCapturedImage(bitmap: Bitmap?, lat: Double?, lng: Double?) {
+        if (bitmap == null) {
+            _uiState.update { it.copy(error = "No se pudo capturar la imagen.") }
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                selectedImageUri = null,
+                originalBitmap = bitmap,
+                filteredBitmap = null,
+                filterName = null,
+                uploadSuccess = false,
+                error = null,
+                latitude = lat,
+                longitude = lng
+            )
+        }
     }
 
     private fun uriToBitmap(uri: Uri, contentResolver: ContentResolver): Bitmap? {
