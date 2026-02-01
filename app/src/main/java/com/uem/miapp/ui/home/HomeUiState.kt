@@ -13,4 +13,5 @@ data class HomeUiState(
     val uploadSuccess: Boolean = false,
     val latitude: Double? = null,
     val longitude: Double? = null,
-    )
+    val imageLoading: Boolean = false
+)

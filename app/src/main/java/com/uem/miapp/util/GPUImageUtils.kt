@@ -20,7 +20,7 @@ object GPUImageUtils {
             FilterType.GRAYSCALE -> GPUImageGrayscaleFilter()
             FilterType.SKETCH -> GPUImageSketchFilter()
             FilterType.TOON -> GPUImageToonFilter()
-            FilterType.NONE -> GPUImageFilter() // sin filtro
+            FilterType.NONE -> GPUImageFilter()
         }
 
         gpuImage.setFilter(filter)

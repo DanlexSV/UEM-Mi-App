@@ -15,6 +15,23 @@ class AuthViewModel(
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState
 
+    fun resetForm() {
+        _uiState.update {
+            it.copy(
+                email = "",
+                password = "",
+                error = null,
+                loading = false,
+                success = false,
+                isLoginMode = true
+            )
+        }
+    }
+
+    fun consumeSuccess() {
+        _uiState.update { it.copy(success = false) }
+    }
+
     fun onEmailChange(value: String) {
         _uiState.update { it.copy(email = value.trim(), error = null) }
     }

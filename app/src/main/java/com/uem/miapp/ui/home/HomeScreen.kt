@@ -28,6 +28,21 @@ fun HomeScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
+    if (state.loading) {
+        AlertDialog(
+            onDismissRequest = { },
+            confirmButton = {},
+            title = { Text("Subiendo imagen") },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.width(16.dp))
+                    Text("Subiendo a Firebase…")
+                }
+            }
+        )
+    }
+
     val context = LocalContext.current
     val contentResolver = context.contentResolver
 
@@ -61,7 +76,9 @@ fun HomeScreen(
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { isGranted ->
-            if (!isGranted) {
+            if (isGranted) {
+                cameraLauncher.launch(null)
+            } else {
                 Log.e("PERMISSIONS", "Cámara denegada!")
             }
         }
@@ -83,7 +100,12 @@ fun HomeScreen(
             TopAppBar(
                 title = { Text("Home") },
                 actions = {
-                    TextButton(onClick = onSignOut) { Text("Salir") }
+                    TextButton(
+                        onClick = {
+                            viewModel.resetHome()
+                            onSignOut()
+                        }
+                    ) { Text("Salir") }
                 }
             )
         }
@@ -131,7 +153,15 @@ fun HomeScreen(
                             .height(220.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("Aún no hay imagen seleccionada")
+                        if (state.imageLoading) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator()
+                                Spacer(Modifier.height(12.dp))
+                                Text("Cargando foto...")
+                            }
+                        } else {
+                            Text("Aún no hay imagen seleccionada")
+                        }
                     }
                 }
             }
@@ -139,6 +169,7 @@ fun HomeScreen(
             // Botones
             Button(
                 onClick = {
+                    viewModel.setImageLoading(true)
                     pickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                     )
@@ -148,11 +179,13 @@ fun HomeScreen(
                 Text("Elegir foto")
             }
 
-            val hasCameraPermission = context.checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
-
             Button(
                 onClick = {
-                    if (hasCameraPermission) {
+                    viewModel.setImageLoading(true)
+                    val granted = context.checkSelfPermission(android.Manifest.permission.CAMERA) ==
+                            android.content.pm.PackageManager.PERMISSION_GRANTED
+
+                    if (granted) {
                         cameraLauncher.launch(null)
                     } else {
                         cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
@@ -163,11 +196,13 @@ fun HomeScreen(
                 Text("Tomar foto")
             }
 
+            val disabled = state.imageLoading || state.loading
             var showFilterMenu by remember { mutableStateOf(false) }
 
             Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(
                     onClick = { showFilterMenu = true },
+                    enabled = !disabled,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Aplicar filtros")
@@ -217,6 +252,7 @@ fun HomeScreen(
 
             Button(
                 onClick = { viewModel.uploadToFirebase(context) },
+                enabled = !disabled,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Subir imagen a Firebase")
@@ -228,7 +264,7 @@ fun HomeScreen(
             }
 
             if (state.uploadSuccess) {
-                Text("✅ Subida simulada OK (luego Firebase)", color = MaterialTheme.colorScheme.tertiary)
+                Text("Imagen subida correctamente", color = MaterialTheme.colorScheme.tertiary)
             }
         }
     }

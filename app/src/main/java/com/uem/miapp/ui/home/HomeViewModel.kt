@@ -22,25 +22,25 @@ class HomeViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState
 
-    fun onImagePicked(uri: Uri?, contentResolver: ContentResolver) {
-        if (uri == null) return
-
-        val bitmap = uriToBitmap(uri, contentResolver)
-        if (bitmap == null) {
-            _uiState.update { it.copy(error = "No se pudo leer la imagen.", selectedImageUri = uri) }
-            return
-        }
-
+    fun resetHome() {
         _uiState.update {
             it.copy(
-                selectedImageUri = uri,
-                originalBitmap = bitmap,
+                selectedImageUri = null,
+                originalBitmap = null,
                 filteredBitmap = null,
                 filterName = null,
+                loading = false,
                 error = null,
-                uploadSuccess = false
+                uploadSuccess = false,
+                latitude = null,
+                longitude = null,
+                imageLoading = false
             )
         }
+    }
+
+    fun setImageLoading(value: Boolean) {
+        _uiState.update { it.copy(imageLoading = value, error = null) }
     }
 
     fun applyGPUFilter(context: Context, filter: GPUImageUtils.FilterType) {
@@ -87,34 +87,47 @@ class HomeViewModel : ViewModel() {
 
         storageRef.putBytes(imageData)
             .addOnSuccessListener {
-                storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
-                    val metadata = hashMapOf(
-                        "uid" to user.uid,
-                        "url" to downloadUrl.toString(),
-                        "lat" to lat,
-                        "lng" to lng,
-                        "filter" to filter,
-                        "timestamp" to com.google.firebase.Timestamp.now()
-                    )
+                storageRef.downloadUrl
+                    .addOnSuccessListener { downloadUrl ->
+                        val metadata = hashMapOf(
+                            "uid" to user.uid,
+                            "url" to downloadUrl.toString(),
+                            "lat" to lat,
+                            "lng" to lng,
+                            "filter" to filter,
+                            "timestamp" to com.google.firebase.Timestamp.now()
+                        )
 
-                    FirebaseFirestore.getInstance()
-                        .collection("photos")
-                        .add(metadata)
-                        .addOnSuccessListener {
-                            _uiState.update {
-                                it.copy(uploadSuccess = true, loading = false, error = null)
+                        FirebaseFirestore.getInstance()
+                            .collection("photos")
+                            .add(metadata)
+                            .addOnSuccessListener {
+                                _uiState.update {
+                                    it.copy(uploadSuccess = true, loading = false, error = null)
+                                }
                             }
-                        }
-                        .addOnFailureListener { e ->
-                            Log.e("FIRESTORE", "Error metadata: ${e.message}")
-                            _uiState.update {
-                                it.copy(error = "Error al guardar metadata.", loading = false)
+                            .addOnFailureListener { e ->
+                                Log.e("FIRESTORE", "Error metadata: ${e.message}", e)
+                                _uiState.update {
+                                    it.copy(
+                                        error = "Error al guardar metadata: ${e.message}",
+                                        loading = false
+                                    )
+                                }
                             }
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("FIREBASE", "Error obteniendo downloadUrl: ${e.message}", e)
+                        _uiState.update {
+                            it.copy(
+                                error = "Error obteniendo URL: ${e.message}",
+                                loading = false
+                            )
                         }
-                }
+                    }
             }
             .addOnFailureListener { e ->
-                Log.e("FIREBASE", "Error subida: ${e.message}")
+                Log.e("FIREBASE", "Error subida: ${e.message}", e)
                 _uiState.update {
                     it.copy(error = "Error al subir imagen: ${e.message}", loading = false)
                 }
@@ -122,25 +135,34 @@ class HomeViewModel : ViewModel() {
     }
 
     fun onImagePickedWithLocation(uri: Uri?, contentResolver: ContentResolver, lat: Double?, lng: Double?) {
-        if (uri == null) return
+        if (uri == null) {
+            setImageLoading(false)
+            return
+        }
 
-        val inputStream = contentResolver.openInputStream(uri)
-        val bitmap = BitmapFactory.decodeStream(inputStream)
+        val bitmap = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+        if (bitmap == null) {
+            _uiState.update { it.copy(error = "No se pudo leer la imagen.", imageLoading = false) }
+            return
+        }
 
         _uiState.update {
             it.copy(
                 originalBitmap = bitmap,
+                filteredBitmap = null,
+                filterName = null,
                 latitude = lat,
                 longitude = lng,
                 uploadSuccess = false,
-                error = null
+                error = null,
+                imageLoading = false
             )
         }
     }
 
     fun onCapturedImage(bitmap: Bitmap?, lat: Double?, lng: Double?) {
         if (bitmap == null) {
-            _uiState.update { it.copy(error = "No se pudo capturar la imagen.") }
+            _uiState.update { it.copy(error = "No se pudo capturar la imagen.", imageLoading = false) }
             return
         }
 
@@ -153,18 +175,9 @@ class HomeViewModel : ViewModel() {
                 uploadSuccess = false,
                 error = null,
                 latitude = lat,
-                longitude = lng
+                longitude = lng,
+                imageLoading = false
             )
-        }
-    }
-
-    private fun uriToBitmap(uri: Uri, contentResolver: ContentResolver): Bitmap? {
-        return try {
-            contentResolver.openInputStream(uri).use { input ->
-                if (input == null) null else BitmapFactory.decodeStream(input)
-            }
-        } catch (_: Exception) {
-            null
         }
     }
 }

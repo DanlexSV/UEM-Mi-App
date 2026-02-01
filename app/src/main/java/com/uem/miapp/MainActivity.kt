@@ -16,6 +16,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.uem.miapp.ui.theme.MiAppTheme
 import com.uem.miapp.ui.login.AuthScreen
 import com.uem.miapp.ui.home.HomeScreen
+import androidx.compose.runtime.DisposableEffect
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -26,19 +27,18 @@ class MainActivity : ComponentActivity() {
                 val auth = remember { FirebaseAuth.getInstance() }
                 var isLoggedIn by remember { mutableStateOf(auth.currentUser != null) }
 
+                DisposableEffect(Unit) {
+                    val listener = FirebaseAuth.AuthStateListener { fbAuth ->
+                        isLoggedIn = fbAuth.currentUser != null
+                    }
+                    auth.addAuthStateListener(listener)
+                    onDispose { auth.removeAuthStateListener(listener) }
+                }
+
                 if (!isLoggedIn) {
-                    AuthScreen(
-                        onAuthSuccess = {
-                            isLoggedIn = true
-                        }
-                    )
+                    AuthScreen(onAuthSuccess = { })
                 } else {
-                    HomeScreen(
-                        onSignOut = {
-                            com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
-                            isLoggedIn = false
-                        }
-                    )
+                    HomeScreen(onSignOut = { auth.signOut() })
                 }
             }
         }

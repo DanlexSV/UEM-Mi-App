@@ -25,10 +25,17 @@ fun AuthScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
+    LaunchedEffect(Unit) {
+        viewModel.resetForm()
+    }
+
     var passwordVisible by remember { mutableStateOf(false) }
 
     if (state.success) {
-        LaunchedEffect(Unit) { onAuthSuccess() }
+        LaunchedEffect(state.success) {
+            viewModel.consumeSuccess()
+            onAuthSuccess()
+        }
     }
 
     Column(
